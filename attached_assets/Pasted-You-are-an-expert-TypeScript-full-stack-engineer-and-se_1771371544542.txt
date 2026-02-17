@@ -1,0 +1,190 @@
+You are an expert TypeScript full-stack engineer and security-minded agent architect.
+
+Your job: scaffold a working, minimal “Voice-Driven Coding Assistant” in Replit with a modular, portable architecture so I can later copy it to GitHub and replace/remove Replit-specific pieces without changing core logic.
+
+HARD REQUIREMENTS (non-negotiable)
+1) Use TypeScript end-to-end.
+2) Create a modular repo with a “core” package that contains ALL business logic (intent schema, parsing, planning, risk policy, confirmation gating, summarization, audit logging).
+3) The “adapter” layer must be separate. Build a Web adapter (browser client + server) inside adapters/web. This adapter provides voice I/O and calls core APIs. It must not contain business logic beyond wiring.
+4) Safety model:
+   - Deny-by-default execution.
+   - Only allow whitelisted actions: LIST_FILES, OPEN_FILE, RUN_TESTS, SEARCH_CODE, INSTALL_DEPENDENCIES (the last 3 can be stubbed but must exist in schema).
+   - Enforce PROJECT_ROOT sandbox: all file reads/listing must remain inside the project directory. Explicitly block path traversal and absolute paths.
+   - No destructive commands. Anything outside whitelist must be rejected.
+   - Execution must require explicit user confirmation via a confirmation token generated during planning. No token = no execution.
+5) Outcome-driven language:
+   - The assistant must summarize planned actions in plain language (e.g., “I’m preparing to list your project files.”), not raw shell commands.
+6) Confirmation gating:
+   - The system must always PLAN first, return a summary + plan_id + confirmation_token, then only execute after an explicit “Confirm” action from the user.
+7) Validation loop: At each phase, provide short, concrete justification of tool choices and how each module enforces safety, plus a small test procedure to validate.
+8) Phase 1 must run in Replit immediately: push-to-talk or “Start Recording” optional; simplest acceptable is: browser speech-to-text (Web Speech API) OR text input fallback if STT is unavailable. Browser TTS must speak responses (speechSynthesis).
+9) Provide a runnable demo for LIST_FILES first. OPEN_FILE should work next (open and display the first N lines safely). Other intents can be stubbed (schema + planning + safe rejections) but must be present.
+
+DELIVERABLES
+A) Create the full project structure with files and code.
+B) Ensure it starts with a single command (e.g., `npm run dev`) in Replit.
+C) Include README with:
+   - Architecture overview
+   - How the confirmation token flow works
+   - How safety restrictions work (project root, whitelist)
+   - How to add a new intent/action safely
+   - Test scenarios (positive + negative)
+D) Include basic unit tests for core safety helpers (path validation and whitelist enforcement).
+
+REPO STRUCTURE (must follow this exactly)
+voice-coding-assistant/
+  package.json
+  tsconfig.json
+  README.md
+  .gitignore
+
+  core/
+    package.json
+    tsconfig.json
+    src/
+      intents/
+        schema.ts
+        parser.ts
+      planning/
+        policy.ts
+        risk.ts
+        planner.ts
+        confirm.ts
+      summarize/
+        summarizer.ts
+      audit/
+        audit.ts
+      safety/
+        path.ts
+        whitelist.ts
+      index.ts
+    test/
+      path.test.ts
+      whitelist.test.ts
+
+  adapters/
+    web/
+      package.json
+      tsconfig.json
+      src/
+        server/
+          main.ts
+          routes.ts
+          executor.ts
+        client/
+          index.html
+          app.ts
+          styles.css
+
+IMPLEMENTATION DETAILS (follow precisely)
+
+CORE MODULE BEHAVIOR
+1) intents/schema.ts
+   - Define IntentType union: LIST_FILES | OPEN_FILE | RUN_TESTS | SEARCH_CODE | INSTALL_DEPENDENCIES
+   - Define Intent object shape:
+     {
+       intent_type: IntentType,
+       parameters: Record<string, any>,
+       requires_confirmation: true,
+       risk_level: "LOW"|"MEDIUM"|"HIGH"
+     }
+2) intents/parser.ts
+   - Parse user text into Intent.
+   - Phase 1 parsing rules:
+     - “list files”, “show files”, “ls” -> LIST_FILES
+     - “open <path>”, “show <path>” -> OPEN_FILE with parameter { path: "<path>" }
+     - “run tests”, “test” -> RUN_TESTS
+     - “search <term>” -> SEARCH_CODE with { query: "<term>" }
+     - “install dependencies”, “npm install” -> INSTALL_DEPENDENCIES
+   - If ambiguous/unrecognized, return a safe error intent or throw a handled error; never guess a risky action.
+3) planning/policy.ts and risk.ts
+   - Risk mapping:
+     - LIST_FILES, OPEN_FILE, SEARCH_CODE => LOW
+     - RUN_TESTS, INSTALL_DEPENDENCIES => MEDIUM
+   - Any unknown action => HIGH and reject.
+4) planning/planner.ts
+   - Validate intent against whitelist; if not allowed, return a “rejected plan” with reason.
+   - Produce:
+     {
+       plan_id: string,
+       intent: Intent,
+       summary: string,          // outcome-driven
+       steps: string[],          // high-level steps, no raw commands
+       requires_confirmation: true,
+       confirmation_token: string,
+       expires_at: ISO string
+     }
+5) planning/confirm.ts
+   - Implement confirmation token generation and verification.
+   - Token must be required for execution.
+   - Token must be bound to plan_id and intent hash to prevent tampering.
+6) summarize/summarizer.ts
+   - Convert plan + results into spoken summaries.
+   - Must not include raw shell commands by default.
+7) safety/path.ts
+   - Implement:
+     - normalizeUserPath(userPath, projectRoot)
+     - isSafePath(userPath) -> boolean
+   - Must reject:
+     - absolute paths
+     - any path traversal (“..”)
+     - Windows drive letters
+8) safety/whitelist.ts
+   - Enforce allowed intents.
+9) audit/audit.ts
+   - Append JSONL entries to a log file under adapters/web (or a logs/ folder) with timestamp, plan_id, intent_type, outcome, error if any.
+
+WEB ADAPTER (Replit runnable)
+1) server/main.ts
+   - Express server (or similar minimal HTTP server).
+   - Endpoints:
+     - POST /api/plan { text: string } -> returns plan object (or rejection)
+     - POST /api/execute { plan_id: string, confirmation_token: string } -> executes and returns result
+     - POST /api/open { plan_id, confirmation_token } -> optional if you separate OPEN_FILE, but preferred to unify under execute
+   - Must store planned intents in memory (Map by plan_id) for Phase 1.
+2) server/executor.ts
+   - Implement execution for:
+     - LIST_FILES: list directory entries in PROJECT_ROOT, return limited count (e.g., first 200), exclude node_modules by default (configurable).
+     - OPEN_FILE: read a file (max size limit), return first N lines.
+   - For RUN_TESTS / INSTALL_DEPENDENCIES / SEARCH_CODE:
+     - Return “Not implemented yet” OR a safe stub, but DO NOT execute shell commands in Phase 1 unless explicitly asked; if you do, wrap in strict whitelist and timeouts.
+3) client/app.ts
+   - UI with:
+     - Input box for text
+     - Button “🎙️ Speak” using Web Speech API (with fallback if unsupported)
+     - Button “Plan”
+     - Button “Confirm & Execute”
+     - Area showing:
+       - recognized text
+       - plan summary
+       - execution result
+   - Use browser speechSynthesis to read:
+     - plan summary
+     - post-execution outcome
+   - The assistant must say “I can do X. Do you want me to proceed?” and wait.
+4) README.md
+   - Document architecture and confirmation flow.
+   - Document security model and how to add actions.
+5) Tests
+   - path.test.ts and whitelist.test.ts using a minimal test runner (vitest or jest). Keep it simple and runnable.
+
+RUN INSTRUCTIONS
+- Provide exact commands to run in Replit:
+  - npm install
+  - npm run dev
+- Ensure ports are configured to work in Replit.
+
+OUTPUT RULES
+- Create the files directly with complete code (no placeholders like “TODO” for core safety/confirm).
+- Keep Phase 1 minimal but correct and secure.
+- After scaffolding, print:
+  1) How to run
+  2) How to test LIST_FILES by voice and by typing
+  3) One negative test: attempt “open ../secrets” must be blocked with a spoken warning
+
+BEGIN NOW
+1) Create the folder structure and package configs.
+2) Implement core modules.
+3) Implement web adapter server + client.
+4) Add tests.
+5) Provide README and run steps.
