@@ -27,6 +27,40 @@ This project follows a modular architecture designed for portability and safety.
 *   **Sandbox**: File access is restricted to the project root. Path traversal (`../`) is blocked.
 *   **Whitelist**: Only specific intents are allowed. Destructive actions are not implemented in the whitelist.
 
+## Environment Setup
+
+1.  Copy the example environment file:
+    ```bash
+    cp .env.example .env
+    ```
+
+2.  Edit `.env` with your settings:
+
+    | Variable | Required | Default | Description |
+    |----------|----------|---------|-------------|
+    | `PORT` | No | `5000` | HTTP server port |
+    | `DATABASE_URL` | No | — | PostgreSQL connection string for audit logging |
+    | `NODE_ENV` | No | `development` | `development` or `production` |
+
+### Running Without a Database
+
+The server starts and serves the full voice assistant UI without `DATABASE_URL`.
+Audit logging (which records executed plans to PostgreSQL) is disabled, and a
+warning is printed at startup. All core features — voice input, plan generation,
+confirmation, and execution — work normally.
+
+To enable audit logging, provide a PostgreSQL connection string in `.env`:
+```
+DATABASE_URL=postgres://user:password@localhost:5432/devvoice
+```
+
+Then push the schema:
+```bash
+npm run db:push
+```
+
+You can check database connectivity at any time via `GET /api/db-status`.
+
 ## Quick Start
 
 1.  **Run the App**:

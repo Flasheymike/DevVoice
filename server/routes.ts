@@ -2,6 +2,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { isDbAvailable } from "./db";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import * as path from "path";
@@ -135,6 +136,17 @@ export async function registerRoutes(
       console.error(err);
       res.status(500).json({ message: "Internal server error" });
     }
+  });
+
+  // --- API: DB STATUS ---
+  app.get("/api/db-status", (_req, res) => {
+    if (!isDbAvailable()) {
+      return res.status(503).json({
+        status: "unavailable",
+        message: "Database is not configured. Set DATABASE_URL to enable audit logging.",
+      });
+    }
+    res.json({ status: "connected" });
   });
 
   // --- API: EXECUTE ---
