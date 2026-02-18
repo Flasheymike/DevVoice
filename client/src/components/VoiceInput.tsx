@@ -54,6 +54,11 @@ export function VoiceInput({ onPlanRequest, isProcessing }: VoiceInputProps) {
           </div>
 
           <div className="flex md:flex-col gap-2 p-2 border-t md:border-t-0 md:border-l border-white/5 items-center justify-center bg-black/20">
+            {!isSupported && (
+              <p className="text-xs text-destructive px-2 text-center">
+                Speech recognition is not supported or permitted in this browser.
+              </p>
+            )}
             {isSupported && (
               <Button
                 size="icon"

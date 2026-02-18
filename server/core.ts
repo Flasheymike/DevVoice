@@ -67,6 +67,11 @@ export function normalizeUserPath(userPath: string, root: string = PROJECT_ROOT)
   const resolved = path.resolve(root, userPath);
   
   // 2. Enforce sandbox: must start with PROJECT_ROOT
+  // On Replit, PROJECT_ROOT is often /home/runner/workspace
+  // We need to ensure we're comparing the real paths
+  const realRoot = root.endsWith("/") ? root : root + "/";
+  const realResolved = resolved.endsWith("/") ? resolved : resolved + "/";
+
   if (!resolved.startsWith(root)) {
     return null;
   }
