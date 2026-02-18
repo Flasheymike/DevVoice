@@ -73,6 +73,29 @@ You can check database connectivity at any time via `GET /api/db-status`.
     *   Review the plan card.
     *   Click "Confirm & Execute".
 
+### Docker
+
+Docker Compose provides a PostgreSQL 16 database and the production app in one command.
+
+**Full stack (app + database):**
+```bash
+docker compose up --build
+```
+The app is available at `http://localhost:5000`. To push the database schema:
+```bash
+DATABASE_URL=postgres://devvoice:devvoice@localhost:5432/devvoice npm run db:push
+```
+
+**Database only (for local dev):**
+```bash
+docker compose up db
+```
+Then set `DATABASE_URL` in your `.env`:
+```
+DATABASE_URL=postgres://devvoice:devvoice@localhost:5432/devvoice
+```
+And run the dev server as usual with `npm run dev`.
+
 ## Testing
 
 ### Manual Testing
